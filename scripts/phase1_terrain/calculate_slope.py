@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_FOLDER = PROJECT_ROOT / "src"
 
 sys.path.insert(0, str(SRC_FOLDER))
@@ -14,6 +14,7 @@ SOURCE_DEM = (
     PROJECT_ROOT
     / "data"
     / "processed"
+    / "phase1_terrain"
     / "study_area_dem_utm44n.tif"
 )
 
@@ -21,6 +22,7 @@ OUTPUT_SLOPE = (
     PROJECT_ROOT
     / "data"
     / "processed"
+    / "phase1_terrain"
     / "slope_degrees.tif"
 )
 

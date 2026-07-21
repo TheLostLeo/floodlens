@@ -1,3 +1,8 @@
 rasterio
 numpy
 pytest 
+whitebox
+fastapi
+uvicorn[standard]
+requests
+python-dotenv

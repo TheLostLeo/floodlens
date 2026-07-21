@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FloodLens — Terrain Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f4f7f9; color: #102a43; }
+      header { padding: 16px 22px; background: #073b4c; color: white; }
+      header h1, header p { margin: 0; } header p { margin-top: 4px; font-size: .9rem; }
+      main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: calc(100vh - 76px); }
+      #map { min-height: 600px; } aside { padding: 22px; background: white; border-left: 1px solid #d9e2ec; }
+      h2 { margin-top: 0; font-size: 1.1rem; }.hint,.notice { font-size: .9rem; line-height: 1.5; }
+      .card { margin-top: 18px; padding: 14px; background: #edf6f9; border-radius: 8px; }
+      .value { font-weight: 700; }.badge { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #ffe08a; font-weight: 700; text-transform: capitalize; }
+      .warning { margin-top: 18px; padding: 12px; border-left: 4px solid #f59e0b; background: #fffbeb; font-size: .82rem; line-height: 1.45; }
+      @media (max-width: 800px) { main { grid-template-columns: 1fr; } #map { min-height: 58vh; } aside { border-left: 0; border-top: 1px solid #d9e2ec; } }
+    </style>
+  </head>
+  <body>
+    <header><h1>FloodLens</h1><p>Terrain exploration prototype</p></header>
+    <main>
+      <div id="map" aria-label="FloodLens interactive map"></div>
+      <aside>
+        <h2>Select an area</h2>
+        <p class="hint">Click the map. FloodLens draws a roughly 10 km selection box and checks local terrain data at its centre.</p>
+        <div id="result" class="card">Click inside the current DEM coverage to begin.</div>
+        <div class="warning"><strong>Important:</strong> this is not a flood forecast. It currently uses elevation and slope only.</div>
+      </aside>
+    </main>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+      const map = L.map("map").setView([13.05, 80.15], 8);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+      let selectionLayer, marker;
+      const result = document.getElementById("result");
+      function makeBounds(lat, lng) {
+        const latDelta = 0.045;
+        const lngDelta = 0.045 / Math.cos((lat * Math.PI) / 180);
+        return [[lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta]];
+      }
+      function render(data, lat, lng) {
+        if (!data.data_available) { result.innerHTML = `<strong>No local terrain tile</strong><p class="notice">${data.message}</p>`; return; }
+        result.innerHTML = `<strong>Terrain result</strong><p>Selected: <span class="value">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></p><p>Elevation: <span class="value">${data.elevation_m} m</span></p><p>Slope: <span class="value">${data.slope_degrees}°</span></p><p>Water-collection tendency: <span class="badge">${data.water_collection_tendency}</span></p><p class="notice">${data.message}</p>`;
+      }
+      map.on("click", async (event) => {
+        const { lat, lng } = event.latlng;
+        if (selectionLayer) map.removeLayer(selectionLayer); if (marker) map.removeLayer(marker);
+        selectionLayer = L.rectangle(makeBounds(lat, lng), { color: "#e85d04", weight: 2, fillOpacity: .08 }).addTo(map);
+        marker = L.marker([lat, lng]).addTo(map); result.textContent = "Checking terrain data…";
+        try { const response = await fetch(`/api/terrain/point?longitude=${lng}&latitude=${lat}`); if (!response.ok) throw new Error("The terrain request failed."); render(await response.json(), lat, lng); }
+        catch (error) { result.innerHTML = `<strong>Unable to check terrain</strong><p class="notice">${error.message}</p>`; }
+      });
+    </script>
+  </body>
+</html>

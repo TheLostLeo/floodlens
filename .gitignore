@@ -2,3 +2,5 @@
 data/
 .agents
 .env
+*/__pycache__/
+*.py[cod]

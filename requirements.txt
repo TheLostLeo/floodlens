@@ -1,8 +1,9 @@
 rasterio
 numpy
-pytest 
+pytest
 whitebox
 fastapi
 uvicorn[standard]
 requests
 python-dotenv
+Pillow

@@ -1,58 +1,839 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FloodLens — Terrain Viewer</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-    <style>
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: system-ui, sans-serif; background: #f4f7f9; color: #102a43; }
-      header { padding: 16px 22px; background: #073b4c; color: white; }
-      header h1, header p { margin: 0; } header p { margin-top: 4px; font-size: .9rem; }
-      main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: calc(100vh - 76px); }
-      #map { min-height: 600px; } aside { padding: 22px; background: white; border-left: 1px solid #d9e2ec; }
-      h2 { margin-top: 0; font-size: 1.1rem; }.hint,.notice { font-size: .9rem; line-height: 1.5; }
-      .card { margin-top: 18px; padding: 14px; background: #edf6f9; border-radius: 8px; }
-      .value { font-weight: 700; }.badge { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #ffe08a; font-weight: 700; text-transform: capitalize; }
-      .warning { margin-top: 18px; padding: 12px; border-left: 4px solid #f59e0b; background: #fffbeb; font-size: .82rem; line-height: 1.45; }
-      @media (max-width: 800px) { main { grid-template-columns: 1fr; } #map { min-height: 58vh; } aside { border-left: 0; border-top: 1px solid #d9e2ec; } }
-    </style>
-  </head>
-  <body>
-    <header><h1>FloodLens</h1><p>Terrain exploration prototype</p></header>
-    <main>
-      <div id="map" aria-label="FloodLens interactive map"></div>
-      <aside>
-        <h2>Select an area</h2>
-        <p class="hint">Click the map. FloodLens draws a roughly 10 km selection box and checks local terrain data at its centre.</p>
-        <div id="result" class="card">Click inside the current DEM coverage to begin.</div>
-        <div class="warning"><strong>Important:</strong> this is not a flood forecast. It currently uses elevation and slope only.</div>
-      </aside>
-    </main>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script>
-      const map = L.map("map").setView([13.05, 80.15], 8);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
-      let selectionLayer, marker;
-      const result = document.getElementById("result");
-      function makeBounds(lat, lng) {
-        const latDelta = 0.045;
-        const lngDelta = 0.045 / Math.cos((lat * Math.PI) / 180);
-        return [[lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta]];
-      }
-      function render(data, lat, lng) {
-        if (!data.data_available) { result.innerHTML = `<strong>No local terrain tile</strong><p class="notice">${data.message}</p>`; return; }
-        result.innerHTML = `<strong>Terrain result</strong><p>Selected: <span class="value">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></p><p>Elevation: <span class="value">${data.elevation_m} m</span></p><p>Slope: <span class="value">${data.slope_degrees}°</span></p><p>Water-collection tendency: <span class="badge">${data.water_collection_tendency}</span></p><p class="notice">${data.message}</p>`;
-      }
-      map.on("click", async (event) => {
-        const { lat, lng } = event.latlng;
-        if (selectionLayer) map.removeLayer(selectionLayer); if (marker) map.removeLayer(marker);
-        selectionLayer = L.rectangle(makeBounds(lat, lng), { color: "#e85d04", weight: 2, fillOpacity: .08 }).addTo(map);
-        marker = L.marker([lat, lng]).addTo(map); result.textContent = "Checking terrain data…";
-        try { const response = await fetch(`/api/terrain/point?longitude=${lng}&latitude=${lat}`); if (!response.ok) throw new Error("The terrain request failed."); render(await response.json(), lat, lng); }
-        catch (error) { result.innerHTML = `<strong>Unable to check terrain</strong><p class="notice">${error.message}</p>`; }
-      });
-    </script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FloodLens — Flood Risk Assessment</title>
+  <meta name="description" content="AI-powered terrain-based flood risk assessment platform. Search any region to generate a heatmap of flood susceptibility." />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- Leaflet Draw -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" crossorigin="" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-app:       #0a0f1e;
+      --bg-panel:     rgba(12, 18, 35, 0.92);
+      --bg-card:      rgba(255,255,255,0.04);
+      --bg-input:     rgba(255,255,255,0.07);
+      --border:       rgba(255,255,255,0.09);
+      --border-focus: rgba(99,179,237,0.6);
+
+      --text-primary:   #e8eef7;
+      --text-secondary: #7c93b5;
+      --text-muted:     #4a5c78;
+
+      --accent:         #3b82f6;
+      --accent-glow:    rgba(59,130,246,0.25);
+      --accent-hover:   #2563eb;
+
+      --risk-low:    #1a56db;
+      --risk-mid:    #f0dc14;
+      --risk-high:   #b00000;
+
+      --success:  #22c55e;
+      --warning:  #f59e0b;
+      --error:    #ef4444;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+
+      --panel-w: 380px;
+      --header-h: 58px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.45);
+    }
+
+    html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; background: var(--bg-app); color: var(--text-primary); }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    #app { display: flex; height: 100%; flex-direction: column; }
+
+    header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 22px; height: var(--header-h);
+      background: var(--bg-panel); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px); z-index: 1000; position: relative;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+    }
+
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, #1a56db, #3b82f6);
+      display: grid; place-items: center; font-size: 18px;
+      box-shadow: 0 0 16px rgba(59,130,246,0.4);
+    }
+    .logo h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo p  { font-size: 0.72rem; color: var(--text-secondary); }
+
+    .header-spacer { flex: 1; }
+
+    .header-badge {
+      font-size: 0.7rem; font-weight: 600; padding: 4px 10px;
+      border-radius: 999px; border: 1px solid var(--border);
+      color: var(--text-secondary); background: var(--bg-card);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    #content { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Side panel ─────────────────────────────────────────────────── */
+    #panel {
+      width: var(--panel-w); flex-shrink: 0;
+      background: var(--bg-panel); border-right: 1px solid var(--border);
+      backdrop-filter: blur(20px); overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0;
+      z-index: 500;
+    }
+
+    .panel-section {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Search ─────────────────────────────────────────────────────── */
+    .search-wrapper {
+      position: relative;
+    }
+
+    .search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); pointer-events: none; font-size: 16px;
+    }
+
+    #search-input {
+      width: 100%; padding: 11px 44px 11px 38px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-primary);
+      font-family: inherit; font-size: 0.92rem; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #search-input::placeholder { color: var(--text-muted); }
+    #search-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .search-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+      display: none; transition: color 0.15s;
+    }
+    .search-clear:hover { color: var(--text-primary); }
+    .search-clear.visible { display: block; }
+
+    #search-hint {
+      font-size: 0.78rem; color: var(--text-muted); margin-top: 8px; line-height: 1.5;
+    }
+
+    /* Autocomplete suggestions */
+    #suggestions {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #111827; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); overflow: hidden;
+      z-index: 9999; box-shadow: var(--shadow);
+      display: none;
+    }
+    #suggestions.visible { display: block; }
+
+    .suggestion-item {
+      padding: 10px 14px; cursor: pointer; font-size: 0.85rem;
+      border-bottom: 1px solid var(--border); transition: background 0.12s;
+      line-height: 1.4;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover, .suggestion-item.active { background: var(--bg-input); }
+    .suggestion-place { font-weight: 500; }
+    .suggestion-type  { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+
+    /* ── Run button ─────────────────────────────────────────────────── */
+    #btn-analyse {
+      width: 100%; margin-top: 14px; padding: 12px;
+      background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+      border: none; border-radius: var(--radius-sm);
+      color: #fff; font-family: inherit; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+    }
+    #btn-analyse:hover:not(:disabled) {
+      opacity: 0.92; transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(59,130,246,0.45);
+    }
+    #btn-analyse:active:not(:disabled) { transform: translateY(0); }
+    #btn-analyse:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Progress ───────────────────────────────────────────────────── */
+    #progress-section { display: none; }
+    #progress-section.visible { display: block; }
+
+    .progress-label {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .progress-step { font-size: 0.83rem; color: var(--text-secondary); }
+    .progress-pct  { font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+
+    .progress-track {
+      height: 6px; background: var(--bg-input); border-radius: 999px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, #1d4ed8, #60a5fa);
+      border-radius: 999px; transition: width 0.5s ease;
+      box-shadow: 0 0 12px rgba(96,165,250,0.5);
+    }
+
+    .progress-place {
+      font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Result info ────────────────────────────────────────────────── */
+    #result-section { display: none; }
+    #result-section.visible { display: block; }
+
+    .result-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
+      background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3);
+      color: var(--success); margin-bottom: 12px;
+    }
+
+    .result-place {
+      font-size: 0.88rem; font-weight: 500; color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .result-meta {
+      font-size: 0.76rem; color: var(--text-muted); line-height: 1.6;
+    }
+
+    #btn-reset {
+      width: 100%; margin-top: 14px; padding: 10px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-secondary);
+      font-family: inherit; font-size: 0.88rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    #btn-reset:hover { background: var(--bg-input); color: var(--text-primary); }
+
+    /* ── Error state ────────────────────────────────────────────────── */
+    #error-section { display: none; }
+    #error-section.visible { display: block; }
+
+    .error-card {
+      padding: 14px; border-radius: var(--radius-sm);
+      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+    }
+    .error-title { font-size: 0.85rem; font-weight: 600; color: var(--error); margin-bottom: 6px; }
+    .error-msg   { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
+
+    /* ── Legend ─────────────────────────────────────────────────────── */
+    #legend-section { display: none; }
+    #legend-section.visible { display: block; }
+
+    .legend-bar {
+      height: 10px; border-radius: 999px; margin-bottom: 6px;
+      background: linear-gradient(90deg, #1a56db, #f0dc14, #b00000);
+    }
+    .legend-labels {
+      display: flex; justify-content: space-between;
+      font-size: 0.72rem; color: var(--text-muted);
+    }
+
+    .opacity-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    }
+    .opacity-label { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+    #opacity-slider {
+      flex: 1; accent-color: var(--accent); cursor: pointer;
+    }
+
+    /* ── Disclaimer ─────────────────────────────────────────────────── */
+    .disclaimer {
+      padding: 14px 20px;
+      font-size: 0.72rem; color: var(--text-muted); line-height: 1.6;
+      border-top: 1px solid var(--border); margin-top: auto;
+    }
+    .disclaimer strong { color: var(--warning); }
+
+    /* ── Map ────────────────────────────────────────────────────────── */
+    #map {
+      flex: 1; background: #060d1a;
+    }
+
+    /* Override Leaflet dark mode */
+    .leaflet-container { background: #060d1a !important; }
+    .leaflet-control-zoom a {
+      background: var(--bg-panel) !important; color: var(--text-primary) !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-control-zoom a:hover { background: var(--bg-input) !important; }
+    .leaflet-control-attribution {
+      background: rgba(6,13,26,0.8) !important; color: var(--text-muted) !important;
+      font-size: 10px !important;
+    }
+
+    /* Draw toolbar */
+    .leaflet-draw-toolbar a {
+      background-color: var(--bg-panel) !important;
+      border-color: var(--border) !important;
+    }
+
+    /* ── Loading overlay on map ─────────────────────────────────────── */
+    #map-overlay {
+      position: absolute; inset: 0; z-index: 400;
+      display: none; place-items: center;
+      background: rgba(6,13,26,0.6); backdrop-filter: blur(4px);
+    }
+    #map-overlay.visible { display: grid; }
+
+    .map-spinner {
+      text-align: center; color: var(--text-primary);
+    }
+    .spinner-ring {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 3px solid rgba(59,130,246,0.2);
+      border-top-color: var(--accent);
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 16px;
+    }
+    .spinner-label { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+    .spinner-sub   { font-size: 0.8rem; color: var(--text-secondary); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Draw region hint ───────────────────────────────────────────── */
+    #draw-hint {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      z-index: 500; display: none;
+      background: var(--bg-panel); border: 1px solid var(--border);
+      padding: 8px 16px; border-radius: 999px; font-size: 0.82rem;
+      color: var(--text-secondary); backdrop-filter: blur(16px);
+      box-shadow: var(--shadow); pointer-events: none; white-space: nowrap;
+    }
+    #draw-hint.visible { display: block; }
+
+    /* ── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      :root { --panel-w: 100%; }
+      #content { flex-direction: column; }
+      #panel { width: 100%; max-height: 55vh; border-right: none; border-bottom: 1px solid var(--border); }
+      #map   { min-height: 45vh; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🌊</div>
+      <div>
+        <h1>FloodLens</h1>
+        <p>Terrain-based flood risk assessment</p>
+      </div>
+    </div>
+    <div class="header-spacer"></div>
+    <span class="header-badge">Phase 1 · Terrain</span>
+  </header>
+
+  <div id="content">
+
+    <!-- ── Side panel ─────────────────────────────────────────────────── -->
+    <aside id="panel">
+
+      <!-- Search -->
+      <div class="panel-section">
+        <div class="section-title">Select a Region</div>
+        <div class="search-wrapper" id="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Search country, state, district…"
+            autocomplete="off"
+            aria-label="Search for a region"
+            aria-autocomplete="list"
+            aria-controls="suggestions"
+          />
+          <button class="search-clear" id="search-clear" aria-label="Clear search">✕</button>
+          <div id="suggestions" role="listbox" aria-label="Search suggestions"></div>
+        </div>
+        <p id="search-hint">Type a place name and select it from the list, or draw a rectangle on the map.</p>
+
+        <button id="btn-analyse" disabled>
+          <span>🚀</span> Analyse Flood Risk
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div class="panel-section" id="progress-section">
+        <div class="section-title">Pipeline Running</div>
+        <div class="progress-label">
+          <span class="progress-step" id="progress-step">Starting…</span>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-place" id="progress-place"></div>
+      </div>
+
+      <!-- Result -->
+      <div class="panel-section" id="result-section">
+        <div class="section-title">Analysis Complete</div>
+        <div class="result-badge">✓ Done</div>
+        <div class="result-place" id="result-place"></div>
+        <div class="result-meta" id="result-meta"></div>
+        <button id="btn-reset">↩ New Analysis</button>
+      </div>
+
+      <!-- Error -->
+      <div class="panel-section" id="error-section">
+        <div class="section-title">Pipeline Error</div>
+        <div class="error-card">
+          <div class="error-title">⚠ Analysis failed</div>
+          <div class="error-msg" id="error-msg"></div>
+        </div>
+        <button id="btn-reset-err" style="width:100%;margin-top:12px;padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:inherit;font-size:0.88rem;font-weight:500;cursor:pointer;">↩ Try Again</button>
+      </div>
+
+      <!-- Legend -->
+      <div class="panel-section" id="legend-section">
+        <div class="section-title">Flood Risk Legend</div>
+        <div class="legend-bar"></div>
+        <div class="legend-labels">
+          <span>Low</span>
+          <span>Moderate</span>
+          <span>High</span>
+        </div>
+        <div class="opacity-row">
+          <span class="opacity-label">Heatmap opacity</span>
+          <input type="range" id="opacity-slider" min="0" max="100" value="75" />
+        </div>
+      </div>
+
+      <div class="disclaimer">
+        <strong>Not a flood forecast.</strong> This map uses terrain data only
+        (elevation, slope, flow accumulation, drainage paths). It does not include
+        live rainfall, river gauges, or real-time conditions. Use for research
+        and planning purposes only.
+      </div>
+
+    </aside>
+
+    <!-- ── Map ─────────────────────────────────────────────────────────── -->
+    <div style="flex:1;position:relative;">
+      <div id="map" aria-label="FloodLens flood risk map"></div>
+
+      <!-- Loading overlay on the map -->
+      <div id="map-overlay">
+        <div class="map-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-label">Processing…</div>
+          <div class="spinner-sub" id="overlay-step">Preparing pipeline</div>
+        </div>
+      </div>
+
+      <!-- Draw hint -->
+      <div id="draw-hint">Draw a rectangle on the map to select a custom area</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js" crossorigin=""></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   FloodLens Web Client
+   ═══════════════════════════════════════════════════════════════════════ */
+
+// ── State ────────────────────────────────────────────────────────────────
+let selectedBounds   = null;   // {south, north, west, east}
+let selectedName     = null;   // display label
+let currentJobId     = null;
+let pollTimer        = null;
+let pollStartTime    = null;   // Date.now() when polling began
+let heatmapLayer     = null;
+let selectionRect    = null;
+let debounceTimer    = null;
+const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes hard stop
+
+// ── DOM refs ─────────────────────────────────────────────────────────────
+const searchInput    = document.getElementById('search-input');
+const searchClear    = document.getElementById('search-clear');
+const suggestionsEl  = document.getElementById('suggestions');
+const searchHint     = document.getElementById('search-hint');
+const btnAnalyse     = document.getElementById('btn-analyse');
+const progressSec    = document.getElementById('progress-section');
+const progressStep   = document.getElementById('progress-step');
+const progressPct    = document.getElementById('progress-pct');
+const progressFill   = document.getElementById('progress-fill');
+const progressPlace  = document.getElementById('progress-place');
+const resultSec      = document.getElementById('result-section');
+const resultPlace    = document.getElementById('result-place');
+const resultMeta     = document.getElementById('result-meta');
+const btnReset       = document.getElementById('btn-reset');
+const btnResetErr    = document.getElementById('btn-reset-err');
+const errorSec       = document.getElementById('error-section');
+const errorMsg       = document.getElementById('error-msg');
+const legendSec      = document.getElementById('legend-section');
+const mapOverlay     = document.getElementById('map-overlay');
+const overlayStep    = document.getElementById('overlay-step');
+const opacitySlider  = document.getElementById('opacity-slider');
+const drawHint       = document.getElementById('draw-hint');
+
+// ── Map initialisation ───────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([13.05, 80.15], 6);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+}).addTo(map);
+
+// Dark-tinted tile layer from CartoDB
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://carto.com">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20,
+}).addTo(map);
+
+// Leaflet.draw — rectangle only
+const drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  draw: {
+    rectangle: {
+      shapeOptions: { color: '#3b82f6', weight: 2, fillOpacity: 0.08 }
+    },
+    polyline: false, polygon: false, circle: false,
+    circlemarker: false, marker: false,
+  },
+  edit: { featureGroup: drawnItems, remove: false },
+});
+map.addControl(drawControl);
+
+map.on(L.Draw.Event.DRAWSTART, () => { drawHint.classList.add('visible'); });
+map.on(L.Draw.Event.DRAWSTOP,  () => { drawHint.classList.remove('visible'); });
+
+map.on(L.Draw.Event.CREATED, (e) => {
+  drawnItems.clearLayers();
+  drawnItems.addLayer(e.layer);
+
+  const b = e.layer.getBounds();
+  setSelection(
+    {
+      south: b.getSouth(), north: b.getNorth(),
+      west:  b.getWest(),  east:  b.getEast(),
+    },
+    `Custom region (drawn on map)`,
+    /*fitMap=*/ false,
+  );
+});
+
+// ── Selection management ─────────────────────────────────────────────────
+function setSelection(bounds, name, fitMap = true) {
+  selectedBounds = bounds;
+  selectedName   = name;
+
+  // Draw/update selection rectangle
+  if (selectionRect) map.removeLayer(selectionRect);
+  selectionRect = L.rectangle(
+    [[bounds.south, bounds.west], [bounds.north, bounds.east]],
+    { color: '#3b82f6', weight: 2, fillOpacity: 0.06, dashArray: '6 4' }
+  ).addTo(map);
+
+  if (fitMap) map.fitBounds(selectionRect.getBounds(), { padding: [40, 40] });
+
+  searchHint.textContent = `Selected: ${name}`;
+  btnAnalyse.disabled = false;
+}
+
+function clearSelection() {
+  selectedBounds = null;
+  selectedName   = null;
+  if (selectionRect) { map.removeLayer(selectionRect); selectionRect = null; }
+  drawnItems.clearLayers();
+  btnAnalyse.disabled = true;
+  searchHint.textContent = 'Type a place name and select it from the list, or draw a rectangle on the map.';
+}
+
+// ── Search / autocomplete ────────────────────────────────────────────────
+let activeSuggIdx = -1;
+let suggestionData = [];
+
+function clearSuggestions() {
+  suggestionsEl.innerHTML = '';
+  suggestionsEl.classList.remove('visible');
+  activeSuggIdx = -1;
+  suggestionData = [];
+}
+
+async function fetchSuggestions(query) {
+  if (!query || query.length < 2) { clearSuggestions(); return; }
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=0`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'FloodLens/0.2 (local research tool)' }
+    });
+    const data = await res.json();
+    renderSuggestions(data);
+  } catch { clearSuggestions(); }
+}
+
+function renderSuggestions(results) {
+  suggestionsEl.innerHTML = '';
+  suggestionData = results;
+  if (!results.length) { clearSuggestions(); return; }
+
+  results.forEach((r, i) => {
+    const parts = r.display_name.split(', ');
+    const primary = parts[0];
+    const secondary = parts.slice(1, 3).join(', ');
+
+    const el = document.createElement('div');
+    el.className = 'suggestion-item';
+    el.setAttribute('role', 'option');
+    el.setAttribute('data-idx', i);
+    el.innerHTML = `<div class="suggestion-place">${primary}</div><div class="suggestion-type">${secondary}</div>`;
+
+    el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      selectSuggestion(i);
+    });
+    suggestionsEl.appendChild(el);
+  });
+
+  suggestionsEl.classList.add('visible');
+  activeSuggIdx = -1;
+}
+
+function selectSuggestion(idx) {
+  const r = suggestionData[idx];
+  if (!r) return;
+
+  const [south, north, west, east] = r.boundingbox.map(Number);
+  const name = r.display_name;
+
+  searchInput.value = name.split(',')[0];
+  searchClear.classList.add('visible');
+  clearSuggestions();
+
+  setSelection({ south, north, west, east }, name, true);
+}
+
+searchInput.addEventListener('input', () => {
+  const v = searchInput.value.trim();
+  searchClear.classList.toggle('visible', v.length > 0);
+
+  if (!v) { clearSuggestions(); clearSelection(); return; }
+
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => fetchSuggestions(v), 300);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  const items = suggestionsEl.querySelectorAll('.suggestion-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    activeSuggIdx = Math.min(activeSuggIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === activeSuggIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    activeSuggIdx = Math.max(activeSuggIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === activeSuggIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (activeSuggIdx >= 0) selectSuggestion(activeSuggIdx);
+    else if (suggestionData.length) selectSuggestion(0);
+  } else if (e.key === 'Escape') {
+    clearSuggestions();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('search-wrapper').contains(e.target)) clearSuggestions();
+});
+
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchClear.classList.remove('visible');
+  clearSuggestions();
+  clearSelection();
+  searchInput.focus();
+});
+
+// ── UI state machine ─────────────────────────────────────────────────────
+function showSection(name) {
+  [progressSec, resultSec, errorSec, legendSec].forEach(el => el.classList.remove('visible'));
+  mapOverlay.classList.remove('visible');
+
+  if (name === 'progress') {
+    progressSec.classList.add('visible');
+    mapOverlay.classList.add('visible');
+  } else if (name === 'result') {
+    resultSec.classList.add('visible');
+    legendSec.classList.add('visible');
+  } else if (name === 'error') {
+    errorSec.classList.add('visible');
+  }
+}
+
+function updateProgress(pct, step, place) {
+  progressFill.style.width = `${pct}%`;
+  progressPct.textContent  = `${pct}%`;
+  progressStep.textContent = step;
+  progressPlace.textContent = place || '';
+  overlayStep.textContent  = step;
+}
+
+// ── Pipeline submission ──────────────────────────────────────────────────
+btnAnalyse.addEventListener('click', async () => {
+  if (!selectedBounds) return;
+  await startPipeline(selectedBounds, selectedName);
+});
+
+async function startPipeline(bounds, name) {
+  btnAnalyse.disabled = true;
+  showSection('progress');
+  updateProgress(0, 'Submitting request…', name);
+
+  // Remove any previous heatmap
+  if (heatmapLayer) { map.removeLayer(heatmapLayer); heatmapLayer = null; }
+
+  try {
+    const res = await fetch('/api/analyse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...bounds }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || 'Server rejected the request.');
+    }
+
+    currentJobId = data.job_id;
+    pollStartTime = Date.now();
+    pollTimer = setInterval(() => pollJob(currentJobId, name), 2000);
+
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────
+async function pollJob(jobId, name) {
+  // Hard timeout — stop polling after 10 minutes
+  if (pollStartTime && (Date.now() - pollStartTime) > POLL_TIMEOUT_MS) {
+    stopPolling();
+    showError(
+      'Analysis timed out after 10 minutes. The region may be too large or the ' +
+      'OpenTopography server is not responding. Try a smaller area (e.g. a single district).'
+    );
+    return;
+  }
+
+  try {
+    const res  = await fetch(`/api/jobs/${jobId}`);
+    const data = await res.json();
+
+    if (!res.ok) { stopPolling(); showError(data.detail || 'Unknown error.'); return; }
+
+    updateProgress(data.progress || 0, data.step || '…', name);
+
+    if (data.status === 'done') {
+      stopPolling();
+      await showResult(data, name);
+    } else if (data.status === 'error') {
+      stopPolling();
+      showError(data.error || 'Pipeline failed. Check server logs.');
+    }
+  } catch (err) {
+    stopPolling();
+    showError('Lost connection to server: ' + err.message);
+  }
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// ── Result display ───────────────────────────────────────────────────────
+async function showResult(data, name) {
+  const result = data.result;
+  const bounds = result.bounds;
+
+  // Overlay the heatmap PNG on the map.
+  const imgUrl   = result.heatmap_url + '?t=' + Date.now(); // cache-bust
+  const leafletBounds = [[bounds.south, bounds.west], [bounds.north, bounds.east]];
+
+  heatmapLayer = L.imageOverlay(imgUrl, leafletBounds, {
+    opacity: 0.75,
+    interactive: false,
+    zIndex: 300,
+  }).addTo(map);
+
+  map.fitBounds(leafletBounds, { padding: [30, 30] });
+
+  showSection('result');
+  resultPlace.textContent = name;
+  resultMeta.innerHTML = `
+    Bounds: ${bounds.south.toFixed(3)}°N, ${bounds.west.toFixed(3)}°E →
+    ${bounds.north.toFixed(3)}°N, ${bounds.east.toFixed(3)}°E<br/>
+    The heatmap shows relative flood susceptibility based on elevation,
+    slope, flow accumulation, and drainage paths.
+  `;
+
+  btnAnalyse.disabled = false;
+}
+
+// ── Error display ────────────────────────────────────────────────────────
+function showError(msg) {
+  showSection('error');
+  errorMsg.textContent = msg;
+  btnAnalyse.disabled = false;
+}
+
+// ── Reset ────────────────────────────────────────────────────────────────
+function resetUI() {
+  stopPolling();
+  currentJobId = null;
+  if (heatmapLayer) { map.removeLayer(heatmapLayer); heatmapLayer = null; }
+  clearSelection();
+  searchInput.value = '';
+  searchClear.classList.remove('visible');
+  showSection(null);
+}
+
+btnReset.addEventListener('click', resetUI);
+btnResetErr.addEventListener('click', resetUI);
+
+// ── Opacity slider ───────────────────────────────────────────────────────
+opacitySlider.addEventListener('input', () => {
+  const v = Number(opacitySlider.value) / 100;
+  if (heatmapLayer) heatmapLayer.setOpacity(v);
+});
+</script>
+</body>
 </html>

@@ -1,11 +1,23 @@
 import os
 import rasterio
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.warp import calculate_default_transform, reproject, Resampling, transform_bounds
+
+
+def _utm_crs_for_bounds(src_crs, bounds):
+    """Pick the UTM CRS (EPSG code) whose zone contains the centroid of `bounds`."""
+    lon_min, lat_min, lon_max, lat_max = transform_bounds(src_crs, "EPSG:4326", *bounds)
+    center_lon = (lon_min + lon_max) / 2
+    center_lat = (lat_min + lat_max) / 2
+    zone = int((center_lon + 180) / 6) + 1
+    epsg = (32600 if center_lat >= 0 else 32700) + zone
+    return f"EPSG:{epsg}"
 
 
 def reproject_dem_to_utm(source_path, output_path):
     """
-    Reproject a DEM GeoTIFF from EPSG:4326 to EPSG:32644 (WGS 84 / UTM zone 44N).
+    Reproject a DEM GeoTIFF from its source CRS to the UTM zone matching its
+    location (auto-detected from the DEM's centroid), so any DEM worldwide
+    reprojects to a correct metric CRS instead of a hardcoded zone.
     
     Parameters:
     -----------
@@ -51,7 +63,7 @@ def reproject_dem_to_utm(source_path, output_path):
         src_nodata = src.nodata
         
         # Calculate transform for target CRS and resolution (30m x 30m)
-        dst_crs = "EPSG:32644"
+        dst_crs = _utm_crs_for_bounds(src_crs, src.bounds)
 
         transform, width, height = calculate_default_transform(
             src.crs,

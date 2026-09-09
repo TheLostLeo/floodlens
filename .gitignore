@@ -1,6 +1,7 @@
 .venv
 data/
-.agents
+.agent/
 .env
 */__pycache__/
 *.py[cod]
+.pytest_cache/

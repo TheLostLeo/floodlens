@@ -1,0 +1,13 @@
+.git
+.agent
+.agents
+.codex
+.env
+.venv
+.pytest_cache
+**/__pycache__
+**/.pytest_cache
+apps/web/node_modules
+apps/web/dist
+data/imports
+data/artifacts

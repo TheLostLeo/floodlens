@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS analysis_terrain_context (
+  analysis_id UUID PRIMARY KEY REFERENCES analyses(id) ON DELETE CASCADE,
+  context JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS analysis_rainfall_context (
+  analysis_id UUID PRIMARY KEY REFERENCES analyses(id) ON DELETE CASCADE,
+  context JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

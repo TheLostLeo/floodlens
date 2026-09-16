@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-floodlens}
+      POSTGRES_USER: ${POSTGRES_USER:-floodlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [data]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - analysis_artifacts:/var/lib/floodlens/artifacts
+    networks: [web, data]
+
+  worker:
+    build: ./apps/api
+    command: python -m app.worker
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - analysis_artifacts:/var/lib/floodlens/artifacts
+      - ./data/imports:/imports:ro
+    networks: [data, egress]
+
+  importer:
+    build:
+      context: .
+      dockerfile: tools/hydrosheds-importer.Dockerfile
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-floodlens}
+      POSTGRES_USER: ${POSTGRES_USER:-floodlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+    entrypoint: ["/bin/sh", "/tools/import_hydrosheds.sh"]
+    volumes:
+      - ./data/imports:/imports:ro
+      - ./tools:/tools:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [data]
+
+  migrate:
+    image: postgis/postgis:16-3.4
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-floodlens}
+      POSTGRES_USER: ${POSTGRES_USER:-floodlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+    entrypoint: ["/bin/sh", "/tools/apply_migrations.sh"]
+    volumes:
+      - ./apps/api/migrations:/migrations:ro
+      - ./tools:/tools:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [data]
+
+networks:
+  web:
+  data:
+    internal: true
+  egress:
+
+volumes:
+  postgres_data:
+  analysis_artifacts:

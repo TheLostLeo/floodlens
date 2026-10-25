@@ -4,6 +4,9 @@
 .codex
 .env
 .venv
+.venv-research
+.trail
+.impeccable
 .pytest_cache
 **/__pycache__
 **/.pytest_cache
@@ -11,3 +14,5 @@ apps/web/node_modules
 apps/web/dist
 data/imports
 data/artifacts
+data/research
+research/artifacts

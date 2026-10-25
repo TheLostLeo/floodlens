@@ -22,6 +22,21 @@ The importer expects standard HydroSHEDS fields such as `HYBAS_ID`, `NEXT_DOWN`,
 
 Import provenance is a readiness gate. Having one region imported means the datasets are available, not globally complete; a point outside imported polygons returns `outside_coverage`.
 
+The app exposes registered local coverage at:
+
+```text
+GET /api/datasets/coverage
+```
+
+For presentation evidence, export the same registered imports from PostGIS:
+
+```sh
+docker compose --profile tools run --rm --entrypoint /bin/sh importer /tools/export_dataset_report.sh
+```
+
+Use that report to show dataset name, version, coverage region, source URL,
+licence note, checksum, feature count, status, and import time.
+
 ## Milestone 4 terrain source
 
 - **FABDEM:** bounded bare-earth neighbourhood terrain tiles. Use GeoTIFF or

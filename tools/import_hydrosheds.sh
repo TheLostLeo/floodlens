@@ -27,9 +27,14 @@ PSQL="psql -v ON_ERROR_STOP=1 -h db -U $POSTGRES_USER -d $POSTGRES_DB"
 BASINS_SHA256=$(sha256sum "$BASINS_FILE" | awk '{print $1}')
 RIVERS_SHA256=$(sha256sum "$RIVERS_FILE" | awk '{print $1}')
 
-$PSQL -c "DROP TABLE IF EXISTS staging_hydrobasins; DROP TABLE IF EXISTS staging_hydrorivers;"
-shp2pgsql -s 4326 -W UTF-8 "$BASINS_FILE" staging_hydrobasins | $PSQL
-shp2pgsql -s 4326 -W UTF-8 "$RIVERS_FILE" staging_hydrorivers | $PSQL
+$PSQL -c "
+  DROP TABLE IF EXISTS staging_hydrobasins;
+  DROP TABLE IF EXISTS staging_hydrorivers;
+  DROP SEQUENCE IF EXISTS staging_hydrobasins_gid_seq CASCADE;
+  DROP SEQUENCE IF EXISTS staging_hydrorivers_gid_seq CASCADE;
+"
+shp2pgsql -D -s 4326 -W UTF-8 "$BASINS_FILE" staging_hydrobasins | $PSQL
+shp2pgsql -D -s 4326 -W UTF-8 "$RIVERS_FILE" staging_hydrorivers | $PSQL
 
 $PSQL \
   -v basin_level="$BASIN_LEVEL" \

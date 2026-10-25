@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FloodLens Research Viewer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">FLOODLENS LAB</p>
+      <h1>Historical-event water mapping</h1>
+      <p id="disclaimer"></p>
+    </div>
+    <span class="badge">Held-out events only</span>
+  </header>
+  <main>
+    <aside>
+      <div class="controls">
+        <label>Event<select id="event"></select></label>
+        <label>Sort chips<select id="sort"><option value="name">Name</option><option value="worst">Worst overlap</option><option value="missed">Most missed water</option><option value="false">Most false water</option></select></label>
+        <label>Image chip<select id="chip"></select></label>
+        <label>Overlay and sorting model<select id="focus-model"><option value="unet">Deep U-Net</option><option value="extra_trees">Extra Trees</option></select></label>
+        <label>Linked zoom <output id="zoom-value">1.0×</output><input id="zoom" type="range" min="1" max="4" value="1" step="0.25"></label>
+        <label>Overlay opacity <output id="opacity-value">55%</output><input id="opacity" type="range" min="0" max="100" value="55" step="5"></label>
+      </div>
+      <section id="summary"></section>
+      <section class="classification" aria-labelledby="classification-heading">
+        <h2 id="classification-heading">Whole-chip classification</h2>
+        <p class="method">These models decide whether this historical chip contains observed water. They do not produce the pixel masks shown on the right.</p>
+        <div id="classification-results"></div>
+      </section>
+      <div class="legend"><h2>Error colors</h2><p><i class="correct"></i>Correct</p><p><i class="false-positive"></i>False water</p><p><i class="missed"></i>Missed water</p><p><i class="invalid"></i>No label</p></div>
+      <details open><summary>Run details</summary><div id="run-details"></div></details>
+      <details><summary>Experiment history</summary><div id="experiment-history"></div></details>
+    </aside>
+    <section class="workspace">
+      <div class="context" id="context"></div>
+      <p class="interaction-hint">Increase zoom, then pan any panel. All panels follow the same view.</p>
+      <div class="grid">
+        <figure><figcaption>Radar input <small>VV / VH false color</small></figcaption><div class="viewport"><img class="zoom-image" id="sar" src="data/Bolivia_103757-sar.png" alt="Sentinel-1 radar input"></div></figure>
+        <figure><figcaption>Verified label <small>Observed water</small></figcaption><div class="viewport"><img class="zoom-image" id="label" src="data/Bolivia_103757-label.png" alt="Verified observed-water label"></div></figure>
+        <figure><figcaption>Extra Trees prediction <small id="tree-chip-score"></small></figcaption><div class="viewport"><img class="zoom-image" id="tree-prediction" src="data/Bolivia_103757-extra_trees.png" alt="Extra Trees predicted water mask"></div></figure>
+        <figure><figcaption>Deep U-Net prediction <small id="unet-chip-score"></small></figcaption><div class="viewport"><img class="zoom-image" id="unet-prediction" src="data/Bolivia_103757-unet.png" alt="U-Net predicted water mask"></div></figure>
+        <figure><figcaption>Extra Trees failures <small>Orange false · Pink missed</small></figcaption><div class="viewport"><img class="zoom-image" id="tree-errors" src="data/Bolivia_103757-extra_trees-errors.png" alt="Extra Trees error map"></div></figure>
+        <figure><figcaption>Deep U-Net failures <small>Orange false · Pink missed</small></figcaption><div class="viewport"><img class="zoom-image" id="unet-errors" src="data/Bolivia_103757-unet-errors.png" alt="U-Net error map"></div></figure>
+        <figure class="overlay-figure"><figcaption>Radar + selected prediction <small id="overlay-caption"></small></figcaption><div class="viewport overlay-viewport"><div class="overlay-content"><img id="overlay-sar" src="data/Bolivia_103757-sar.png" alt="Radar input"><img class="overlay-mask" id="overlay-mask" src="data/Bolivia_103757-unet.png" alt="Selected model overlay"></div></div></figure>
+      </div>
+      <section class="note"><h2>How the models work together</h2><p>The rainfall LSTM and gradient baseline classify the whole historical chip. Extra Trees and U-Net independently map observed-water pixels. All thresholds and checkpoints come from validation events; the displayed event remained held out during fitting. The reference may include permanent rivers or lakes.</p></section>
+    </section>
+  </main>
+  <script src="viewer_logic.js?v=2"></script>
+  <script src="app.js?v=2"></script>
+</body>
+</html>

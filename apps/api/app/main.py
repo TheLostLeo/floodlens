@@ -9,7 +9,7 @@ from . import repository
 from .basins import get_basin_context
 from .db import healthcheck
 from .config import settings
-from .schemas import AnalysisCreate, AnalysisResponse, BasinContextResponse
+from .schemas import AnalysisCreate, AnalysisResponse, BasinContextResponse, DatasetCoverageResponse
 
 logging.basicConfig(level=logging.INFO, format='{"time":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}')
 app = FastAPI(title="FloodLens Next API", version="0.1.0")
@@ -68,11 +68,19 @@ def basin_context(
     return get_basin_context(latitude, longitude)
 
 
+@app.get("/api/datasets/coverage", response_model=DatasetCoverageResponse)
+def dataset_coverage() -> dict:
+    return repository.list_dataset_coverage()
+
+
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 ASSETS_DIR = STATIC_DIR / "assets"
+RESEARCH_DIR = STATIC_DIR / "research"
 
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="frontend-assets")
+if RESEARCH_DIR.exists():
+    app.mount("/research", StaticFiles(directory=RESEARCH_DIR, html=True), name="research-viewer")
 
 
 @app.get("/", include_in_schema=False)

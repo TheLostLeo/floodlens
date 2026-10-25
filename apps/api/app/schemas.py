@@ -70,3 +70,25 @@ class BasinContextResponse(BaseModel):
     provenance: dict[str, Any] | None = None
     missing_datasets: list[str] = Field(default_factory=list)
     limitations: list[str]
+
+
+class DatasetCoverageItem(BaseModel):
+    dataset_name: str
+    version: str
+    level: int | None = None
+    coverage: str
+    source_url: str
+    licence: str
+    sha256: str
+    feature_count: int
+    status: str
+    detail: str | None = None
+    imported_at: datetime
+
+
+class DatasetCoverageResponse(BaseModel):
+    status: str
+    message: str
+    datasets: list[DatasetCoverageItem]
+    missing_required: list[str] = Field(default_factory=list)
+    limitations: list[str]

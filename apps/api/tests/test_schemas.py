@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from app.schemas import AnalysisCreate
+from app.schemas import AnalysisCreate, DatasetCoverageResponse
 
 
 @pytest.mark.parametrize("payload", [
@@ -16,3 +16,15 @@ def test_invalid_analysis_input_is_rejected(payload):
 
 def test_valid_analysis_input():
     assert AnalysisCreate(latitude=13.0827, longitude=80.2707, radius_km=2).radius_km == 2
+
+
+def test_dataset_coverage_response_preserves_missing_required():
+    response = DatasetCoverageResponse(
+        status="partial",
+        message="Some required resident-facing datasets are not imported or registered.",
+        datasets=[],
+        missing_required=["fabdem"],
+        limitations=["coverage is partial"],
+    )
+    assert response.status == "partial"
+    assert response.missing_required == ["fabdem"]

@@ -12,5 +12,10 @@ apps/web/dist/
 data/imports/*
 !data/imports/.gitkeep
 data/artifacts/
+data/research/
+research/artifacts/
+research/viewer/data/
 .agent/
 .agents/
+
+.venv-segmentation/

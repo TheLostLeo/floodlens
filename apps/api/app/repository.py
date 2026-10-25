@@ -32,6 +32,48 @@ def get_analysis(analysis_id: UUID) -> dict | None:
     return dict(row) if row else None
 
 
+def list_dataset_coverage() -> dict:
+    with engine.connect() as connection:
+        rows = connection.execute(text("""
+          SELECT DISTINCT ON (dataset_name, coverage, level)
+            dataset_name, version, level, coverage, source_url, licence, sha256,
+            feature_count, status, detail, imported_at
+          FROM dataset_imports
+          ORDER BY dataset_name, coverage, level, imported_at DESC
+        """)).mappings().all()
+
+    datasets = []
+    ready_names = set()
+    for row in rows:
+        item = dict(row)
+        if item.get("imported_at") is not None:
+            item["imported_at"] = item["imported_at"].isoformat()
+        if item["status"] == "ready":
+            ready_names.add(item["dataset_name"])
+        datasets.append(item)
+
+    required_live = ("hydrobasins", "hydrorivers", "fabdem")
+    missing_required = [name for name in required_live if name not in ready_names]
+    if missing_required:
+        status = "partial" if ready_names else "unavailable"
+        message = "Some required resident-facing datasets are not imported or registered."
+    else:
+        status = "ready"
+        message = "Required resident-facing datasets are registered as ready for their imported coverage."
+
+    return {
+        "status": status,
+        "message": message,
+        "datasets": datasets,
+        "missing_required": missing_required,
+        "limitations": [
+            "Ready datasets only cover the regions listed here; they do not imply global coverage.",
+            "FABDEM coverage is tile-based and must overlap the selected 1/2/5 km circle.",
+            "HydroBASINS and HydroRIVERS give basin and river context, not property-level flood connectivity.",
+        ],
+    }
+
+
 def claim_next() -> dict | None:
     with engine.begin() as connection:
         row = connection.execute(text("""

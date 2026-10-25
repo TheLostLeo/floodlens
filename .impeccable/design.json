@@ -1,0 +1,91 @@
+{
+  "name": "FloodLens resident interface",
+  "source": [
+    "apps/web/src/styles.css",
+    "apps/web/src/main.tsx",
+    "PRODUCT.md"
+  ],
+  "direction": "Calm civic service with expandable technical evidence",
+  "verification": {
+    "basis": "Current source inspection",
+    "browserVisualQA": "unavailable",
+    "approvedImageComposition": false,
+    "printRendering": "unverified"
+  },
+  "tokens": {
+    "color": {
+      "canvas": "#f4f6f3",
+      "ink": "#203b39",
+      "muted": "#536763",
+      "accent": "#126656",
+      "accentHover": "#0d4f42",
+      "line": "#d5dfd9",
+      "paper": "#fff",
+      "controlBorder": "#aabeb5",
+      "controlHover": "#e7f0eb",
+      "focus": "#246da0",
+      "selectionBackground": "#c4e5da",
+      "selectionText": "#153b32",
+      "noticeBackground": "#f0f5f1",
+      "errorText": "#8d2626",
+      "errorBackground": "#fff1ee",
+      "warningText": "#785008",
+      "warningBackground": "#fff5df",
+      "river": "#216da6",
+      "basin": "#785a9b",
+      "upstream": "#90613e",
+      "mapBackground": "#e5ece5"
+    },
+    "typography": {
+      "family": "system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif",
+      "bodySize": "15px",
+      "bodyLineHeight": 1.6,
+      "heroSize": "clamp(26px,3vw,38px)",
+      "heroLineHeight": 1.2,
+      "headingSize": "20px",
+      "subheadingSize": "17px",
+      "headingWeight": 650,
+      "metadataSize": "12px",
+      "printBodySize": "11pt"
+    },
+    "radius": {
+      "panel": "12px",
+      "button": "7px",
+      "input": "6px",
+      "notice": "8px"
+    },
+    "layout": {
+      "contentMaxWidth": "1368px",
+      "pagePadding": "24px",
+      "mobilePagePadding": "16px",
+      "locationColumn": "320px",
+      "compactLocationColumn": "280px",
+      "workspaceGap": "24px",
+      "compactWorkspaceGap": "16px",
+      "assessmentPadding": "28px",
+      "mobileAssessmentPadding": "20px",
+      "mapHeight": "420px",
+      "compactMapHeight": "450px",
+      "mobileMapHeight": "340px"
+    },
+    "breakpoints": {
+      "mobileMax": "640px",
+      "compactMax": "850px",
+      "wideAssessmentMin": "1100px"
+    },
+    "interaction": {
+      "controlMinHeight": "44px",
+      "focusWidth": "3px",
+      "focusOffset": "3px",
+      "disabledOpacity": 0.55
+    },
+    "map": {
+      "assessmentFillOpacity": 0.04,
+      "basinFillOpacity": 0,
+      "basinDashArray": "6 5",
+      "riverWeight": 3,
+      "boundaryWeight": 2,
+      "contextLayersInitiallyVisible": false
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # FloodLens
 
-Resident-facing worldwide flood-awareness application through Milestone 5. FloodLens separates a small neighbourhood assessment area from its larger river-basin context. It is **not** an official alert service, evacuation tool, exact flood-depth predictor, or proof that a property will flood.
+Neighbourhood flood-awareness application through Milestone 5. The current resident demo focuses on India and the neighbouring subcontinent; assessments are available only where real datasets cover the chosen point and circle. FloodLens separates a small neighbourhood assessment area from its larger river-basin context. It is **not** an official alert service, evacuation tool, exact flood-depth predictor, or proof that a property will flood.
 
 ## Implemented source
 
@@ -18,7 +18,31 @@ Resident-facing worldwide flood-awareness application through Milestone 5. Flood
 The repository root is the authoritative resident-facing rebuild. Historical
 synthetic-model prototype code and artifacts have been removed.
 
+## Project handbook and PPT material
+
+Presentation-ready technical material is in [docs/README.md](docs/README.md).
+It links architecture, pipeline, software stack, methodology, frontend,
+backend, numerical metrics, current status, risks, future ML work, and a
+slide-by-slide PPT outline. The metrics document explicitly separates measured
+engineering evidence from the completed, research-only ML benchmark. Its F1
+and related metrics are not claims about the resident web application.
+
+For a teammate or another AI coding assistant, start with
+[TEAMMATE-README.md](TEAMMATE-README.md). It explains the system, datasets,
+research boundary, current verification, and safe development rules.
+
+## Research ML pipeline
+
+The research-only, real-label ML workflow is documented in
+[research/README.md](research/README.md). It uses a separate environment and
+does not change the resident-facing awareness result. Its event-held-out
+baseline and LSTM experiments report metrics only after a completed run writes
+held-out predictions to `research/artifacts/`.
+
 ## Local configuration
+
+For the India-focused project presentation, use the [five-minute demo guide](docs/local-demo.md). It records verified Chennai terrain points, startup checks and remaining live-verification gaps.
+
 
 1. Install Docker Desktop (or Docker Engine with the Compose plugin).
 2. For the fastest local demo, run `docker compose up --build` and open `http://localhost:8000`.
@@ -40,6 +64,7 @@ Do not use `docker compose down -v` unless permanent deletion of database and ar
 - `GET /api/analyses/{uuid}` returns progress and optional basin context.
 - `POST /api/analyses/{uuid}/requeue` requeues only a `waiting_for_data` job.
 - `GET /api/basins/context?latitude=13.08&longitude=80.27` returns available, unavailable, or outside-coverage context.
+- `GET /api/datasets/coverage` returns registered imported dataset coverage, provenance, missing required datasets, and limitations.
 - `GET /health/live` and `GET /health/ready` provide health status.
 
 Before HydroBASINS/HydroRIVERS are imported, context APIs return an honest unavailable result. Before FABDEM tiles are mounted, terrain results return an honest unavailable result. Once FABDEM coverage exists for the selected circle, the worker can complete an analysis with a deterministic, explainable terrain susceptibility score. This score is relative terrain susceptibility, not flood probability, flood depth, or an emergency warning.
@@ -86,6 +111,16 @@ sudo docker compose up --build
 
 Then create a new analysis or click **Check imported data again** on a waiting one.
 
+To export a dataset evidence report from the local database for your README,
+PPT, or viva, run:
+
+```sh
+docker compose --profile tools run --rm --entrypoint /bin/sh importer /tools/export_dataset_report.sh
+```
+
+The report lists only registered imports. It is proof of imported local
+coverage, not proof of worldwide coverage.
+
 ## Verification commands
 
 ```sh
@@ -93,14 +128,10 @@ cd apps/api && python -m pytest tests
 docker compose config
 ```
 
-Python source compilation succeeds. The complete tests currently require the
-pinned API dependencies, including SQLAlchemy and Rasterio. The preserved
-legacy virtual environment can run the dependency-light domain, schema,
-weather, terrain-scoring, and worker tests. Docker Compose is unavailable in
-the current Codex execution environment, and frontend dependencies have not
-been installed locally.
-
-The first successful Docker build will install the pinned frontend and backend
-dependencies. It should also be followed by generating and retaining
-`apps/web/package-lock.json`; then change the root Dockerfile from `npm
-install` to `npm ci` and verify the complete stack.
+Focused terrain, worker, and weather tests pass locally (9 tests). The
+TypeScript/Vite production build passes and the committed frontend lockfile
+has a clean npm audit. The full API collection still requires a test
+environment with the pinned SQLAlchemy/PostGIS dependencies. Docker daemon
+access is not available to Codex itself, but the local user-run demo has
+successfully completed analyses using imported HydroSHEDS data and FABDEM
+tiles.

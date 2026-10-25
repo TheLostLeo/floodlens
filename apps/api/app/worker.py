@@ -97,16 +97,18 @@ def process_one() -> bool:
             )
             return True
 
+        terrain_note = terrain.get("message", "Local FABDEM terrain is unavailable.")
+        weather_note = "Rainfall forecast is unavailable." if weather_error else "Rainfall forecast is ready."
         if context["status"] == "available":
-            message = "Basin context and rainfall are ready. Local FABDEM terrain is still pending import."
+            message = f"Basin context is ready. {weather_note} {terrain_note}"
             progress = 80
             error_code = "terrain_unavailable"
         elif context["status"] == "outside_coverage":
-            message = "The point is outside imported basin coverage; local FABDEM terrain is also pending."
+            message = f"The point is outside imported basin coverage. {weather_note} {terrain_note}"
             progress = 65
             error_code = "terrain_unavailable"
         else:
-            message = "Weather checked. HydroBASINS, HydroRIVERS, and local FABDEM terrain data are pending import."
+            message = f"{weather_note} HydroBASINS and HydroRIVERS are unavailable. {terrain_note}"
             progress = 45 if weather_error else 55
             error_code = "weather_unavailable" if weather_error else "spatial_data_unavailable"
         transition(
